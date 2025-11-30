@@ -1,10 +1,30 @@
-
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { Link } from 'expo-router';
+import { Link, useLocalSearchParams } from 'expo-router';
+import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 
 const NoteScreen = () => {
+  const { audioUri } = useLocalSearchParams<{ audioUri: string }>();
+  const player = useAudioPlayer({ uri: audioUri || '' }); // Provide a default empty string if audioUri is undefined
+  const status = useAudioPlayerStatus(player);
+
+  const handlePlayAudio = async () => {
+    if (!player) {
+      return;
+    }
+
+    if (status.playing) {
+      await player.pause();
+    } else {
+      // If audio finished, seek to start before playing again
+      if (status.currentTime === status.duration) {
+        await player.seekTo(0);
+      }
+      await player.play();
+    }
+  };
+
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
@@ -16,9 +36,9 @@ const NoteScreen = () => {
         <Text style={styles.title}>Product Roadmap Review</Text>
       </View>
       <View style={styles.actions}>
-        <TouchableOpacity style={styles.actionButton}>
-          <Feather name="play" size={20} color="white" />
-          <Text style={styles.actionButtonText}>Play</Text>
+        <TouchableOpacity style={styles.actionButton} onPress={handlePlayAudio}>
+          <Feather name={status.playing ? 'pause' : 'play'} size={20} color="white" />
+          <Text style={styles.actionButtonText}>{status.playing ? 'Pause' : 'Play'}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionButton}>
           <Feather name="share-2" size={20} color="white" />
