@@ -1,29 +1,52 @@
-# Welcome to your Expo app 👋
+# Welcome to your MoM Recorder Expo app 👋
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+This is an [Expo](https://expo.dev) project that has been converted to a **bare workflow** to support native modules.
 
 ## Get started
 
-1. Install dependencies
+1.  **Install dependencies**
 
-   ```bash
-   npm install
-   ```
+    ```bash
+    npm install
+    ```
 
-2. Start the app
+2.  **Android Development Setup**
 
-   ```bash
-   npx expo start
-   ```
+    This project uses native modules and requires a correctly configured Android development environment.
 
-In the output, you'll find options to open the app in a
+    *   **Install Android Studio** and the **Android SDK**.
+    *   **Set `ANDROID_HOME`**: Add the following to your shell configuration file (e.g., `~/.bash_profile`, `~/.zshrc`, `~/.profile`), replacing `/path/to/your/android/sdk` with your actual Android SDK location:
+        ```bash
+        export ANDROID_HOME=/path/to/your/android/sdk
+        export PATH=$PATH:$ANDROID_HOME/emulator
+        export PATH=$PATH:$ANDROID_HOME/platform-tools
+        ```
+    *   **Save** the file and **restart your terminal** or run `source ~/.bash_profile` (or `~/.zshrc`, etc.) to apply changes.
+    *   **Verify Installation**: Run `echo $ANDROID_HOME` and `adb devices` in a new terminal.
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+3.  **Run the app (Android)**
+
+    ```bash
+    npm run android
+    ```
+
+    This will build and run the app on an Android emulator or connected device.
+
+4.  **Run the app (iOS - requires macOS)**
+
+    ```bash
+    npm run ios
+    ```
+
+    This will build and run the app on an iOS simulator or connected device.
 
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+
+## Project Features
+
+This project includes:
+*   **Audio Recording and Playback** using `expo-audio`.
+*   **Native Module Integration** for Speech-to-Text (STT) using `Whisper.cpp` (currently under development).
 
 ## Get a fresh project
 
