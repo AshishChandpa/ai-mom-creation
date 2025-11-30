@@ -15,7 +15,7 @@ const SignInScreen = () => {
 
     if (email === sampleEmail && password === samplePassword) {
       await AsyncStorage.setItem('user-token', 'dummy-token');
-      router.replace('/explore');
+      router.replace('/home');
     } else {
       alert('Invalid credentials');
     }

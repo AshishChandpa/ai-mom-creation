@@ -19,7 +19,7 @@ export function useProtectedRoute() {
       if (!token && !isLoginScreen) {
         router.replace("/");
       } else if (token && isLoginScreen) {
-        router.replace("/explore");
+        router.replace("/home");
       }
       setIsNavigationReady(true);
     };
