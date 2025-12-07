@@ -1,192 +1,227 @@
-
-# **Complete Final Document — On-Device MoM System (React Native MVP)**
+# **Updated Final Document — MoM System (React Native App + Python AI Service)**
 
 ---
 
 ## **1️⃣ Project Overview**
-**Goal:** Build a fully **offline, mobile-first, free, on-device Minutes of Meeting (MoM) generator** that captures internal meeting audio and produces structured MoM with speaker-based action items, decisions, and summary.
 
-**Target Users:** Internal team members, small company meetings.  
-**Primary Platform:** React Native (Android first, iOS later).  
-**Languages Supported:** English (Phase 1), Gujarati (Phase 2).  
-**Core Principle:** Fully offline, zero cloud dependency, free, and privacy-friendly.
+**Goal:** Build a Minutes of Meeting (MoM) generator that captures meeting audio using a mobile app and processes it through a lightweight **Python AI service** to generate structured MoM.
+
+**Key Update:**
+❗ **All AI (STT, diarization, NLP) runs in Python**, not inside the mobile device.
+
+React Native handles:
+
+* Recording
+* Uploading audio
+* Displaying MoM
+
+Python service handles:
+
+* Transcription (Whisper)
+* Diarization
+* NLP (summaries, decisions, action items)
+
+Best for MVP. Fast to develop.
 
 ---
 
 ## **2️⃣ MVP Functional Requirements**
 
-| Feature | Description | Input | Output | Integration / Location |
-|---------|-------------|-------|--------|-----------------------|
-| **Audio Recording** | Record meeting via single phone | User starts/stops recording | WAV/MP3 audio file | React Native (JS) using `react-native-audio-recorder-player` |
-| **Speech-to-Text (STT)** | Transcribe audio offline | Recorded audio | Full transcript with timestamps | Native Module (Kotlin / Swift) → Whisper.cpp |
-| **Speaker Diarization** | Identify multiple speakers as Speaker 1/2/3 | Transcript + audio | Speaker-labeled transcript | Native Module → WhisperX-lite |
-| **Action Item Extraction** | Detect tasks and ownership | Speaker-labeled transcript | List of tasks, speaker assignments, deadlines (if mentioned) | Native Module → Llama.cpp / Gemma 2B |
-| **Decision Extraction** | Detect final agreements/decisions | Speaker-labeled transcript | Structured list of decisions | Native Module → Llama.cpp / Gemma 2B |
-| **Summary Generation** | Condense discussion points | Transcript + diarization | 5–7 bullet point summary | Native Module → Llama.cpp / Gemma 2B |
-| **MoM Formatting** | Combine all outputs into readable format | Summary, Action Items, Decisions | Copy-pasteable page / optional PDF | React Native UI |
-| **Export / Share** | Allow sharing of MoM | Formatted text | Copy, PDF, WhatsApp, Email | React Native UI (`react-native-share`, `react-native-pdf`) |
-| **Offline Operation** | All features work without Internet | N/A | N/A | Entire App (Mobile device only) |
-
-**Exclusions for MVP:**
-- Real-time transcription  
-- Named speaker recognition  
-- Cloud storage / cloud AI  
-- Zoom/Teams integration  
-- Multi-device recording  
+| Feature                   | Description                   | Input              | Output                   | Integration            |
+| ------------------------- | ----------------------------- | ------------------ | ------------------------ | ---------------------- |
+| **Audio Recording**       | Record audio in mobile        | WAV/MP3 file       | Local file               | React Native           |
+| **Audio Upload**          | Send audio to Python backend  | Audio file         | HTTP POST                | React Native → Python  |
+| **STT**                   | Transcribe audio to text      | Audio              | Transcript w/ timestamps | Python → Whisper       |
+| **Diarization**           | Split by Speaker 1/2/3        | Transcript + audio | Labeled transcript       | Python → WhisperX-lite |
+| **NLP Extraction**        | Get tasks, decisions, summary | Labeled transcript | Structured MoM           | Python → Llama/Gemma   |
+| **MoM Formatting**        | Clean readable output         | NLP outputs        | Final MoM                | Python                 |
+| **Display/Export**        | Show MoM, share/copy          | MoM text           | PDF/share                | React Native           |
+| **Offline Audio Capture** | Record without network        | Audio              | Local file               | React Native           |
+| **Online Processing**     | Python required               | Audio upload       | MoM                      | Python backend         |
 
 ---
 
-## **3️⃣ Architecture Overview**
+## **3️⃣ New Architecture (Python-Based)**
 
-### **High-Level Flow**
 ```
-React Native UI (JS/TS)
-     │
-Native Bridges (Kotlin for Android / Swift for iOS)
-     │
-On-Device AI Engines (C++ libraries)
-     ├─ Whisper.cpp (STT)
-     ├─ WhisperX-lite (Diarization)
-     └─ Llama 3.1 3B / Gemma 2B (NLP: Summarization + Task Extraction)
-     │
-MoM Output (Text / PDF / Shareable)
-```
-
----
-
-### **Component Responsibility Table**
-
-| Layer | Component | Responsibility | Integration / Location |
-|-------|-----------|----------------|-----------------------|
-| **UI Layer** | React Native | Screens, buttons, MoM display, sharing | Entire front-end, JS/TS |
-| **Native Module (Android)** | Kotlin | Bridge to C++ engines, memory/thread handling, audio I/O | Whisper.cpp, WhisperX-lite, Llama.cpp |
-| **Native Module (iOS)** | Swift | Bridge to C++ engines, memory/thread handling, audio I/O | Whisper.cpp, WhisperX-lite, Llama.cpp |
-| **AI Engine** | C++ / On-device models | STT, Diarization, NLP extraction | whisper.cpp, WhisperX-lite, llama.cpp/Gemma |
-| **Storage** | Local (optional) | Save audio, transcripts, MoM | react-native-fs / internal storage |
-| **Export / Share** | React Native UI | Copy, PDF, share via WhatsApp/email | react-native-share, react-native-pdf |
-
----
-
-## **4️⃣ Processing Workflow**
-
-1. **Audio Capture (React Native)**  
-   - User taps **Start Recording** → audio saved locally  
-   - Library: `react-native-audio-recorder-player`  
-
-2. **Transcription (Native Module → C++)**  
-   - Whisper.cpp converts audio to transcript with timestamps  
-   - Kotlin/Swift bridge passes file path and receives transcript  
-
-3. **Speaker Diarization (Native Module → C++)**  
-   - WhisperX-lite splits transcript by Speaker 1, Speaker 2, etc.  
-
-4. **NLP Extraction (Native Module → C++)**  
-   - LLM (Llama 3.1 3B) extracts:  
-     - Action Items  
-     - Decisions  
-     - Summary  
-     - Deadlines  
-
-5. **MoM Formatting (React Native)**  
-   - Combine outputs into readable page  
-   - Optional PDF rendering  
-
-6. **Display / Export (React Native)**  
-   - Show formatted MoM  
-   - Allow **copy/share/export**  
-
----
-
-## **5️⃣ Prompts for NLP (LLM)**
-
-**Action Items Extraction Prompt**
-```
-Extract all ACTION ITEMS from the following transcript.
-Include:
-- Speaker
-- Task
-- Deadline (if mentioned)
-Format as a list.
-```
-
-**Decision Extraction Prompt**
-```
-Extract all DECISIONS made in the meeting.
-Focus on agreements or final outcomes.
-```
-
-**Summary Generation Prompt**
-```
-Summarize the meeting in 5–7 concise bullet points.
-Highlight discussions, plans, and outcomes.
-```
-
-**Final MoM Formatting Prompt**
-```
-Combine Summary, Action Items, Decisions into a structured MoM:
-## Summary
-## Action Items
-## Decisions
+      React Native (Mobile App)
+      ├── Audio Recording
+      ├── Upload Audio File
+      └── Display MoM
+                │
+        HTTP API (FastAPI / Flask)
+                │
+        -----------------------------
+        |        Python AI Service         |
+        |----------------------------------|
+        |  Whisper (STT)                  |
+        |  WhisperX-lite (Diarization)    |
+        |  Llama 3.1 / Gemma 2B (NLP)     |
+        |  MoM Generator Pipeline         |
+        -----------------------------
+                │
+           MoM Response (JSON)
 ```
 
 ---
 
-## **6️⃣ Technology Stack**
+## **4️⃣ Python Backend Pipeline**
 
-| Feature | Tech Choice | Notes |
-|--------|-------------|------|
-| UI | React Native | MVP first Android |
-| Audio Recording | react-native-audio-recorder-player | High-quality WAV/MP3 |
-| File Storage | react-native-fs | Optional local history |
-| STT | whisper.cpp | On-device transcription |
-| Diarization | WhisperX-lite | On-device speaker separation |
-| NLP / MoM | Llama 3.1 3B / Gemma 2B | On-device summarization & extraction |
-| Native Bridge | Kotlin / Swift | Connect React Native to C++ AI engines |
-| MoM Export | react-native-share / react-native-pdf | Copy, share, PDF |
+### **Step 1: Audio Upload**
+
+```
+POST /process_audio
+file: meeting.wav
+```
+
+### **Step 2: STT (Whisper)**
+
+* Using **whisper-small** or **tiny.en** for speed
+* Output: `"text"`, `"segments"`, `"timestamps"`
+
+### **Step 3: Speaker Diarization**
+
+* Using **WhisperX-lite**
+* Output: `"speaker_segments"`
+
+### **Step 4: NLP (Llama 3B / Gemma 2B)**
+
+* Extract:
+
+  * Summary
+  * Action Items
+  * Decisions
+  * Deadlines
+  * Topic-wise breakdown (future)
+
+### **Step 5: MoM Formatter**
+
+Python combines everything into a clean JSON:
+
+```json
+{
+  "summary": [],
+  "action_items": [],
+  "decisions": [],
+  "raw_transcript": ""
+}
+```
+
+Mobile app simply displays it.
 
 ---
 
-## **7️⃣ Implementation Decisions for MVP**
+## **5️⃣ Where Each Component Lives**
 
-- LLM Size: **Llama 3.1 3B**  
-- Storage: Optional local storage on phone  
-- Platform: Android first  
-- PDF Export: Yes (optional)  
+### **📱 React Native (Frontend)**
 
----
+* Audio Recorder
+* Local file storage
+* API calls to Python backend
+* MoM viewer
+* Sharing / PDF export
 
-## **8️⃣ MVP Development Plan (8 Weeks)**
+### **🐍 Python (Backend)**
 
-| Week | Tasks |
-|------|-------|
-| 1–2 | React Native project setup, audio recording, local storage integration, Whisper.cpp module integration |
-| 3–4 | Diarization module integration, native bridges setup, Llama.cpp setup |
-| 5 | NLP pipeline: action items, decisions, summary extraction |
-| 6–7 | MoM formatting, UI improvements, export/sharing functionality |
-| 8 | Testing, optimization, multi-speaker handling, internal release |
+* Whisper: STT
+* WhisperX-lite: Diarization
+* Llama: NLP summarization & extraction
+* Result formatter
+* API (FastAPI recommended)
 
----
+### **🗂 Storage**
 
-## **9️⃣ Future Phases**
-
-- Named speaker recognition & voice fingerprinting  
-- Multi-language support (Gujarati, Hindi)  
-- Zoom/Teams recording import  
-- Real-time transcription  
-- Cloud sync & analytics dashboard  
-- Reminder/task tracking from MoM  
+* Optional: Save audio files + MoM logs on server
 
 ---
 
-## **10️⃣ Summary**
+## **6️⃣ API Structure (FastAPI Example)**
 
-This document clearly maps:
+### **POST: /transcribe**
 
-- Each component and its responsibility  
-- Technology stack  
-- Integration points (where React Native, Kotlin/Swift, and C++ engines interact)  
-- Workflow from recording → MoM generation → display/export  
-- Development plan and future roadmap  
+Send audio file to backend.
 
-This serves as a **full blueprint for on-device MoM MVP development**, guiding developers through **what to implement, where, and how**.
+```python
+@app.post("/process_audio")
+async def process_audio(file: UploadFile):
+    audio_path = save_file(file)
+    transcript = run_whisper(audio_path)
+    speakers = diarize(audio_path, transcript)
+    mom = generate_mom(speakers)
+    return mom
+```
 
+---
+
+## **7️⃣ Python Libraries to Use**
+
+| Purpose        | Library                     |
+| -------------- | --------------------------- |
+| Server         | FastAPI                     |
+| STT            | Whisper / faster-whisper    |
+| Diarization    | WhisperX-lite               |
+| NLP            | Llama.cpp (Python bindings) |
+| PDF (optional) | WeasyPrint / ReportLab      |
+| Storage        | Local FS, SQLite (optional) |
+
+---
+
+## **8️⃣ React Native → Python Communication**
+
+Example code:
+
+```javascript
+const formData = new FormData();
+formData.append('file', {
+  uri: audioPath,
+  type: 'audio/wav',
+  name: 'meeting.wav'
+});
+
+const response = await fetch('http://SERVER_IP:8000/process_audio', {
+  method: 'POST',
+  body: formData
+});
+
+const mom = await response.json();
+setMom(mom);
+```
+
+---
+
+## **9️⃣ Updated 8-Week Plan**
+
+| Week | Task                                            |
+| ---- | ----------------------------------------------- |
+| 1–2  | React Native app + audio recording + API wiring |
+| 3    | FastAPI setup + audio upload                    |
+| 4    | Whisper integration                             |
+| 5    | WhisperX diarization                            |
+| 6    | Llama/Gemma NLP MoM generator                   |
+| 7    | MoM formatting + React UI                       |
+| 8    | Testing, optimizations, deployment              |
+
+---
+
+## **🔟 Summary of Changes**
+
+✔ Removed Kotlin/Swift native modules
+✔ AI pipeline moved to Python service
+✔ React Native only handles UI + recording + upload
+✔ Simplifies mobile development dramatically
+✔ Easier to upgrade models in future
+✔ Can scale to cloud when required
+
+---
+
+If you want, I can also generate:
+
+* **FastAPI skeleton code**
+* **Python AI pipeline code**
+* **React Native complete API integration**
+* **Model selection guide (Whisper tiny/small, Llama/Gemma)**
+
+Just tell me:
+👉 *“Give me the FastAPI + Whisper code”*
+or
+👉 *“Give me the React Native API integration full code”*

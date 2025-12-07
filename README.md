@@ -40,13 +40,23 @@ This is an [Expo](https://expo.dev) project that has been converted to a **bare 
 
     This will build and run the app on an iOS simulator or connected device.
 
+5.  **Configure API base URL**
+
+    The app expects the Python service at `EXPO_PUBLIC_API_BASE_URL` (defaults to `http://localhost:8000`).
+
+    ```bash
+    echo "EXPO_PUBLIC_API_BASE_URL=http://<your-ip>:8000" > .env
+    ```
+
+    Replace `<your-ip>` with the machine running the Python service (e.g., `http://192.168.1.10:8000` for device/simulator access).
+
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
 ## Project Features
 
 This project includes:
 *   **Audio Recording and Playback** using `expo-audio`.
-*   **Native Module Integration** for Speech-to-Text (STT) using `Whisper.cpp` (currently under development).
+*   **Backend-first MoM generation**: recordings are uploaded to a Python FastAPI service (Whisper/diarization/LLM pipeline).
 
 ## Get a fresh project
 
@@ -57,6 +67,32 @@ npm run reset-project
 ```
 
 This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+
+## Python backend (FastAPI + faster-whisper)
+
+A FastAPI service lives in `backend/` and exposes `/process_audio` for MoM generation (faster-whisper STT + placeholder diarization/LLM—swap in your models).
+
+```bash
+python3.11 -m venv backend/.venv           # use Python 3.11 to avoid PyAV wheel issues
+source backend/.venv/bin/activate          # Windows: backend\\.venv\\Scripts\\activate
+pip install --upgrade pip
+pip install -r backend/requirements.txt
+uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Endpoints:
+- `GET /health` — readiness ping
+- `POST /process_audio` — multipart `file` upload, runs STT and returns MoM JSON and stores it in memory
+- `GET /mom` — list stored MoM
+- `GET /mom/{id}` — retrieve a stored MoM by id
+
+Update `EXPO_PUBLIC_API_BASE_URL` to point to this service for the mobile app.
+
+### Backend environment notes
+- Run uvicorn from the repo root so `backend` is on `PYTHONPATH` (or set `PYTHONPATH=.`).
+- Default Whisper settings: `WHISPER_MODEL_SIZE=tiny.en`, `WHISPER_DEVICE=cpu`, `WHISPER_COMPUTE_TYPE=int8`. Override via env vars before starting uvicorn.
+- If you see "faster-whisper not available" at startup or stub transcripts in the app, ensure the backend venv uses Python 3.11 and rerun `pip install -r backend/requirements.txt` inside that venv.
+- Backend log should show `[process_audio] Received file: ...` when uploads succeed; otherwise, check the client upload path (native uses `uploadAsync`, web uses FormData/Blob).
 
 ## Learn more
 

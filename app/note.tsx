@@ -3,34 +3,44 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator
 import { Feather } from '@expo/vector-icons';
 import { Link, useLocalSearchParams } from 'expo-router';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
-import { NativeModules } from 'react-native';
-
-const { Whisper } = NativeModules;
+import { momService } from '@/services/mom-service';
+import { MomResponse } from '@/types/mom';
 
 const NoteScreen = () => {
   const { audioUri } = useLocalSearchParams<{ audioUri: string }>();
   const player = useAudioPlayer({ uri: audioUri || '' });
   const status = useAudioPlayerStatus(player);
-  const [transcription, setTranscription] = useState('Transcription will appear here...');
-  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [mom, setMom] = useState<MomResponse | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (audioUri) {
-      handleTranscribeAudio(audioUri);
+      handleProcessAudio(audioUri);
     }
   }, [audioUri]);
 
-  const handleTranscribeAudio = async (uri: string) => {
-    setIsTranscribing(true);
+  const displayTranscript = (raw?: string) => {
+    if (!raw) return 'Transcription will appear here once processing completes.';
+    if (raw.startsWith('Stub transcript for meeting')) {
+      return 'Backend is returning stub text. Connect Whisper/diarization/LLM to see the real transcript.';
+    }
+    return raw;
+  };
+
+  const handleProcessAudio = async (uri: string) => {
+    setIsProcessing(true);
+    setError(null);
     try {
-      const result = await Whisper.transcribeAudio(uri);
-      setTranscription(result);
+      const response = await momService.processAudio(uri);
+      setMom(response);
     } catch (e: any) {
-      console.error("Transcription error:", e);
-      Alert.alert("Transcription Error", e.message || "Failed to transcribe audio.");
-      setTranscription("Failed to transcribe audio.");
+      console.error('Processing error:', e);
+      const message = e?.message || 'Failed to process audio.';
+      setError(message);
+      Alert.alert('Processing Error', message);
     } finally {
-      setIsTranscribing(false);
+      setIsProcessing(false);
     }
   };
 
@@ -71,28 +81,63 @@ const NoteScreen = () => {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Transcription</Text>
-        {isTranscribing ? (
+        {isProcessing ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="small" color="#4A4E9D" />
-            <Text style={styles.loadingText}>Transcribing audio...</Text>
+            <Text style={styles.loadingText}>Uploading and processing audio...</Text>
           </View>
         ) : (
-          <Text style={styles.sectionContent}>{transcription}</Text>
+          <Text style={styles.sectionContent}>
+            {error ? error : displayTranscript(mom?.raw_transcript)}
+          </Text>
         )}
+        <TouchableOpacity
+          style={[styles.actionButton, styles.retryButton]}
+          onPress={() => audioUri && handleProcessAudio(audioUri)}
+          disabled={!audioUri || isProcessing}
+        >
+          <Feather name="refresh-ccw" size={18} color="white" />
+          <Text style={styles.actionButtonText}>
+            {isProcessing ? 'Processing...' : 'Retry Processing'}
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Summary</Text>
         <Text style={styles.sectionContent}>
-          (Summary will be generated here after transcription and NLP processing.)
+          {mom?.summary?.length
+            ? mom.summary.map((item, idx) => `${idx + 1}. ${item}`).join('\n')
+            : '(Summary will be generated here after processing.)'}
         </Text>
       </View>
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Action Items</Text>
         <Text style={styles.sectionContent}>
-          (Action items will be extracted here after transcription and NLP processing.)
+          {mom?.action_items?.length
+            ? mom.action_items.map((item, idx) => `${idx + 1}. ${item}`).join('\n')
+            : '(Action items will appear here after processing.)'}
         </Text>
       </View>
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Decisions</Text>
+        <Text style={styles.sectionContent}>
+          {mom?.decisions?.length
+            ? mom.decisions.map((item, idx) => `${idx + 1}. ${item}`).join('\n')
+            : '(Decisions will appear here after processing.)'}
+        </Text>
+      </View>
+      {mom?.speakers?.length ? (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Speakers</Text>
+          {mom.speakers.map((segment, idx) => (
+            <View key={`${segment.speaker}-${idx}`} style={styles.speakerRow}>
+              <Text style={styles.speakerName}>{segment.speaker}</Text>
+              <Text style={styles.speakerText}>{segment.text}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
     </ScrollView>
   );
 };
@@ -166,6 +211,20 @@ const styles = StyleSheet.create({
     marginLeft: 10,
     fontSize: 16,
     color: '#666',
+  },
+  retryButton: {
+    marginTop: 10,
+  },
+  speakerRow: {
+    marginBottom: 8,
+  },
+  speakerName: {
+    fontWeight: 'bold',
+    marginBottom: 2,
+  },
+  speakerText: {
+    color: '#333',
+    lineHeight: 20,
   },
 });
 

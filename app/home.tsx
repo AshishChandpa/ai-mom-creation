@@ -1,39 +1,50 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, Alert } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useRouter, Link } from 'expo-router';
+import { Link } from 'expo-router';
+import { momService } from '@/services/mom-service';
+import { MomRecord } from '@/types/mom';
 
-const meetings = [
-  {
-    id: '1',
-    date: 'Nov 29, 2025',
-    summary: 'Quarterly planning discussion with team leads',
-    speakers: 4,
-  },
-  {
-    id: '2',
-    date: 'Nov 27, 2025',
-    summary: 'Product roadmap review and sprint planning',
-    speakers: 3,
-  },
-  {
-    id: '3',
-    date: 'Nov 25, 2025',
-    summary: 'Client feedback session and next steps',
-    speakers: 2,
-  },
-];
+const formatDate = (iso?: string) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+};
 
 const HomeScreen = () => {
+  const [meetings, setMeetings] = useState<MomRecord[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadMeetings = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await momService.fetchMomList();
+      setMeetings(data);
+    } catch (e: any) {
+      console.error('Failed to fetch meetings', e);
+      const message = e?.message || 'Failed to load meetings';
+      setError(message);
+      Alert.alert('Error', message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadMeetings();
+  }, []);
+
   const renderItem = ({ item }) => (
     <View style={styles.meetingItem}>
       <View style={styles.meetingHeader}>
         <Feather name="clock" size={16} color="#888" />
-        <Text style={styles.date}>{item.date}</Text>
+        <Text style={styles.date}>{formatDate(item.created_at)}</Text>
         <Feather name="users" size={16} color="#888" />
-        <Text style={styles.speakers}>{item.speakers}</Text>
+        <Text style={styles.speakers}>{item.speakers?.length ?? 0}</Text>
       </View>
-      <Text style={styles.summary}>{item.summary}</Text>
+      <Text style={styles.summary}>{item.summary?.[0] || 'No summary available.'}</Text>
       <View style={styles.actions}>
         <TouchableOpacity>
           <Feather name="play-circle" size={20} color="#888" />
@@ -67,12 +78,22 @@ const HomeScreen = () => {
         <Text style={styles.recordButtonText}>Start Recording</Text>
       </View>
       <Text style={styles.recentMeetingsTitle}>Recent Meetings</Text>
-      <FlatList
-        data={meetings}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
-      />
+      {loading ? (
+        <ActivityIndicator size="small" color="#4A4E9D" />
+      ) : meetings.length === 0 ? (
+        <Text style={styles.emptyText}>
+          {error ? `Unable to load meetings: ${error}` : 'No meetings yet. Record your first meeting!'}
+        </Text>
+      ) : (
+        <FlatList
+          data={meetings}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.list}
+          refreshing={loading}
+          onRefresh={loadMeetings}
+        />
+      )}
     </View>
   );
 };
@@ -155,6 +176,11 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#eee',
     paddingTop: 10,
+  },
+  emptyText: {
+    textAlign: 'center',
+    color: '#666',
+    marginTop: 20,
   },
 });
 
